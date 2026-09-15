@@ -860,10 +860,10 @@ let meMarker = null, accCircle = null, linea = null;
 let pins = [];                 // tutte le soste confermate in questa sessione, come marker sulla mappa
 let seguendo = true;           // se true, la mappa segue la posizione a ogni aggiornamento
 
-// ==================== ROTAZIONE E GPS ====================
+// ==================== ROTAZIONE E GPS CON SOGLIA ====================
 let ultimaPosizione = null;
+const SOGLIA_DISTANZA = 10; // Metri minimi da percorrere prima di aggiornare la rotazione
 
-// Calcola la direzione di marcia
 function calcolaAngolo(lat1, lon1, lat2, lon2) {
     const toRad = Math.PI / 180;
     const toDeg = 180 / Math.PI;
@@ -875,23 +875,33 @@ function calcolaAngolo(lat1, lon1, lat2, lon2) {
     return (brng + 360) % 360;
 }
 
-// Prende la posizione GPS e ruota la mappa
 navigator.geolocation.watchPosition(function(pos) {
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
 
-    // Se abbiamo due punti, calcoliamo la direzione e ruotiamo la mappa
     if (ultimaPosizione) {
-        let angolo = calcolaAngolo(ultimaPosizione.lat, ultimaPosizione.lon, lat, lon);
-        if (seguendo) {
-            document.getElementById('map').style.transform = `rotate(${-angolo}deg)`;
+        // Calcola la distanza in metri usando la libreria Leaflet
+        const puntoPrecedente = L.latLng(ultimaPosizione.lat, ultimaPosizione.lon);
+        const puntoAttuale = L.latLng(lat, lon);
+        const metriPercorsi = puntoPrecedente.distanceTo(puntoAttuale);
+
+        // La mappa gira SOLO SE hai percorso più della soglia stabilita
+        if (metriPercorsi >= SOGLIA_DISTANZA) {
+            let angolo = calcolaAngolo(ultimaPosizione.lat, ultimaPosizione.lon, lat, lon);
+            
+            if (seguendo) {
+                document.getElementById('map').style.transform = `rotate(${-angolo}deg)`;
+            }
+
+            // Aggiorna l'origine della rotazione solo quando supera la distanza
+            ultimaPosizione = { lat: lat, lon: lon };
         }
+    } else {
+        // Primo punto GPS registrato
+        ultimaPosizione = { lat: lat, lon: lon };
     }
 
-    // Salva il punto corrente per la prossima lettura
-    ultimaPosizione = { lat: lat, lon: lon };
-
-    // Crea o sposta il pallino sulla mappa
+    // Il marker si sposta comunque sempre ad ogni passo
     if (!meMarker) {
         meMarker = L.marker([lat, lon], {icon: meIcon}).addTo(map);
     } else {
